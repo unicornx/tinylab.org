@@ -22,35 +22,35 @@ tags:
 
 > There is a saying that you need to spend money to make money, though this apparent paradox is easily resolved with a start-up loan and the discipline of balancing expenses against income. A similar logic applies to the management of memory in an operating system kernel such as Linux: sometimes you need to allocate memory to free memory. Here, too, discipline is needed, though the typical consequences of not being sufficiently careful is not bankruptcy but rather a deadlock.
 
-有一种说法是你需要花钱来赚钱，尽管这种明显的悖论可以通过启动贷款和平衡费用与收入之间的平衡来轻松解决。类似的逻辑适用于操作系统内核（如Linux）中的内存管理：有时您需要分配内存以释放内存。在这里，也需要纪律，尽管不够小心的典型后果不是破产而是僵局。
+有人说，不花钱怎么赚钱，虽然这听上去有点像悖论但解决的方法其实也很简单，就是先贷款获得启动资金，然后严格控制财务上的收支平衡即可。类似的逻辑同样适用于操作系统内核（如 Linux）中的内存管理：有时为了释放内存却不得不先申请分配一点内存。在这里，也需要遵守严格的规则进行处理，否则一不小心，典型的后果不是破产而是系统死锁（deadlock）。
 
 > The history of how the Linux kernel developed its balance between saving and spending is interesting as a microcosm of how Linux development proceeds, and useful in understanding how to handle future deadlocks when they occur. A good place to start this history is in early 1998 with the introduction of `__GFP_IO` in Linux 2.1.80pre3.
 
-Linux内核如何在保存和支出之间取得平衡的历史很有意思，它是Linux开发过程的一个缩影，有助于理解如何在发生死锁时解决它们。1998年初，在Linux 2.1.80pre3中引入了__GFP_IO，这是开始这段历史的好地方 。
+作为整个 Linux 开发过程的缩影，了解一下内核在如何管理内存分配，并保证收支平衡上的历史发展一定非常有趣，并且有助于我们在将来遇到类似的死锁问题时知道如何解决它们。让我们穿越到 1998 年初，那时候的 Linux 版本还是 2.1.80pre3，在这个版本中首次引入了 `__GFP_IO` 标志宏定义，就从这里开始我们的回顾之旅吧。
 
 ## `__GFP_IO` in 2.1.80pre3
 
 > Any memory allocation request in Linux includes a `gfp_t` argument, which is a set of flags to guide how the `get_free_page()` function can go about locating a free page. [2.1.80pre3](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=472bbf0af5bc9f7c933a5d3212b0d765176e728a) marks a change in this argument's type; it went from being a simple enumerated type to being a bitmask. The concepts embodied in each flag were present previously, but this is the first time that they could be explicitly identified.
 
-Linux中的任何内存分配请求都包含一个gfp_t参数，该参数是一组标志，用于指导get_free_page（）函数如何定位空闲页面。 2.1.80pre3 标记了该参数类型的变化; 它从简单的枚举类型变为位掩码。每个国旗中体现的概念先前已经出现，但这是第一次明确确定它们。
+当前 Linux 中所有内存分配操作都会涉及一个类型为 `gfp_t` 参数，该参数是一组比特位标志，用于指示 `get_free_page()` 函数分配一个空闲的物理页框。从内核版本 [2.1.80pre3](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=472bbf0af5bc9f7c933a5d3212b0d765176e728a) 开始我们可以发现该参数类型的变化；从简单的枚举类型变为以比特位掩码的方式。这些标志所包含的含义在早先的版本中都是有定义的，但从这个版本开始我们第一次明确使用比特位的方式来定义它们。
 
 > `__GFP_IO` was one of the new flags. If it was set, then `get_free_pages()` was allowed to call `shm_swap()` to write some pages out to swap. If `shm_swap()` needed to allocate any `buffer_head` structures to complete the writeout, it would be careful not to set `__GFP_IO`. Without this protection, an infinite recursion could easily happen, which would quickly exhaust the stack and cause the kernel to crash.
 
-__GFP_IO是新旗帜之一。如果它被设置，然后 由get_free_pages（）被允许调用shm_swap（）写一些页面出到交换区。如果shm_swap（）需要分配任何 的buffer_head结构来完成WriteOut的，那就要小心不要设置__GFP_IO。如果没有这种保护，很容易发生无限递归，这会很快耗尽堆栈并导致内核崩溃。
+在该版本中新增了一个标志 `__GFP_IO`。如果指定了该标志位，则 `get_free_pages()` 函数中将被允许调用 `shm_swap()` 将一些页框换（swap）出。但要注意的是，如果 `shm_swap()` 函数在执行过程中需要分配 `buffer_head` 结构体来完成写出操作，那指定 `__GFP_IO` 就会出问题。因为一旦设置了 `__GFP_IO`，分配内存过程中很可能会发生无限递归，导致耗尽内核栈并导致内核崩溃。
 
 > We have `__GFP_IO` in the kernel today, but, despite having the same name, it is a different flag. Having been introduced for 2.1.80, the original `__GFP_IO` was removed in 2.1.116, to be replaced with...
 
-我们今天在内核中有__GFP_IO，但是，尽管名称相同，但它是一个不同的标志。在2.1.80中引入后，原始__GFP_IO在2.1.116中被删除，将被替换为......
+当前最新版本的内核中依然存在 `__GFP_IO`，但是，尽管名称相同，含义已经完全不同。自从该标志位在 2.1.80 版本中被引入后，在 2.1.116 版本中曾经被删除，并采用了新的方式来替换它 ......
 
 ## `PF_MEMALLOC` in 2.1.116
 
 > In the [distant past](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) (August 1998), we did not have change logs of nearly the quality that we have today, so an operating-system archaeologist is left to guess at the reasons for changes. All we can be really sure of is that the (per-request) `__GFP_IO` flag to `get_free_page()` disappeared, and a new per-process flag called `PF_MEMALLOC` appeared to take over the task of avoiding recursion. One clear benefit of this change is that it is more focused in addressing one particular issue: recursion is clearly a per-process issue and so a per-process flag is fitting. Previously, many memory allocation sites would avoid `__GFP_IO` when they didn't really need to, just in case. Now each call site doesn't need to worry about the problem of recursion; that concern is addressed precisely where it is needed.
 
-在遥远的过去（1998年8月），我们没有几乎具有今天质量的变化日志，因此操作系统考古学家不得不猜测变化的原因。我们所能确定的是，get_free_page（）的（每个请求）__GFP_IO标志 消失了，一个名为PF_MEMALLOC的新进程标志似乎接管了避免递归的任务。这种变化的一个明显好处是它更专注于解决一个特定问题：递归显然是一个每个进程的问题，因此每个进程标志是合适的。以前，许多内存分配站点都会避免使用__GFP_IO当他们不是真的需要时，为了以防万一。现在每个呼叫站点都不需要担心递归问题; 这种担忧正是在需要的地方得到了解决。
+在遥远的[过去](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d)（1998年8月），我们没有能和当前媲美的修改日志管理系统，因此当我试图考证一些修改的原因时不得不加入自己的猜测。我们所能确定的是，请求分配内存时传递给 `get_free_page()` 函数的 `__GFP_IO` 标志被删除了，取而代之的是增加了一个名为 `PF_MEMALLOC` 的进程标志。同样是用于解决避免递归调用的问题，新方法的一个明显好处是它更贴近我们所要解决的问题：而递归显然是一个针对每个进程的问题，因此在进程标志上增加选项更合适。以前，除非万不得已，内核中许多申请内存分配的地方都会尽量避免使用 `__GFP_IO`，而目的仅仅是为了以防万一（指出现递归的问题）。现在则没有这种担心的必要；内核会在更恰当的地方考量这个问题。
 
 > The code comments here highlight an important aspect of memory allocation:
 
-这里的代码注释突出了内存分配的一个重要方面：
+下面的代码注释强调了内存分配中的这个重要方面：
 
 	 * The "PF_MEMALLOC" flag protects us against recursion:
 	 * if we need more memory as part of a swap-out effort we
@@ -59,15 +59,15 @@ __GFP_IO是新旗帜之一。如果它被设置，然后 由get_free_pages（）
 
 > When possible, `get_free_page()` will just pluck a page off the free list and return it as quickly as it can. When that is not possible, it does not satisfy itself with freeing just one page, but will try to free quite a few, to save work next time. Thus, it is re-stocking that startup loan. A particular consequence of `PF_MEMALLOC` is that the memory allocator won't try too hard to gets lots of pages; it will make do with what it has.
 
-如果可能，get_free_page（）只会从空闲列表中删除页面并尽快返回。当这是不可能的时候，它不会满足于只释放一个页面，但会尝试释放一些，以便下次保存工作。因此，它正在重新储存启动贷款。PF_MEMALLOC的一个特殊后果是内存分配器不会太费力地获取大量页面; 它将与它拥有的东西相关。
+（译者注，以下描述参考 2.1.116 版本的 [`root/mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/history/history.git/tree/mm/page_alloc.c?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) 中的 `__get_free_pages()` ，本文提到的 `get_free_page()` 内部最终还是调用的该函数，但只是申请分配一个页框）如果还有空闲的内存，`get_free_page()` 会分配一个页框后立即返回。如果发现内存不足（即对应代码 `if(freepages.min > nr_free_pages)`），它会尝试释放（free）多个页面而不仅仅只是一个，以确保未来可以有足够的内存可以使用。这么做相当于提前准备好贷款等待下次使用。而如果设置了 `PF_MEMALLOC` 则内存分配器不会尝试释放大量的物理页框；它将直接使用当前还可用的内存（译者注，参考[root/mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/history/history.git/tree/mm/vmscan.c?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) 中的 `try_to_free_pages()`，但这里我有个疑问就是感觉此处代码的逻辑和文章的描述是颠倒的，`PF_MEMALLOC` 的标志位设置的效果怎么反而是会去尝试释放内存呢，年代久远不可考）。
 
 > This means that processes with the `PF_MEMALLOC` flag set will have access to the last dregs of free memory, while other processes will need to go out and free up lots of memory first before they can use any. This property of `PF_MEMALLOC` is still present and somewhat more formal in the current kernel. The memory allocator has a concept of "watermarks" such that, if the amount of free memory is below the chosen watermark, the allocator will try to free more memory rather than return what it has. Different `__GFP` flags can select different watermark levels (min, low, high). `PF_MEMALLOC` causes all watermarks to be ignored; if any memory is available at all, it will be returned.
 
-这意味着设置了PF_MEMALLOC标志的进程可以访问最后一个可用内存渣滓，而其他进程需要先出去并释放大量内存才能使用任何内存。PF_MEMALLOC的这个属性 仍然存在，在当前内核中更为正式。内存分配器具有“水印”的概念，使得如果可用内存量低于所选择的水印，则分配器将尝试释放更多内存而不是返回它具有的内容。不同的 __GFP标志可以选择不同的水印级别（分钟，低，高）。 PF_MEMALLOC导致忽略所有水印; 如果有任何内存可用，它将被返回。
+这意味着设置了 `PF_MEMALLOC` 标志的进程可以访问最后一个可用内存，而其他进程需要先释放大量内存之后才能继续分配内存。`PF_MEMALLOC` 的这个属性 在当前内核中仍然存在，而且意义更明确。在内存分配器中有一个所谓 “水位线” （"watermarks"）的概念，如果当前可用内存量低于所指定的 “水位线”，则分配器将尝试释放更多内存而不再继续分配内存。我们可以指定不同的 `__GFP` 标志来选择不同的“水位线”级别（最小值（min），低（low），高（high））。 而指定了 `PF_MEMALLOC` 则导致分配器忽略所有的“水位线”；只要还有内存可用就返回。
 
 > `PF_MEMALLOC` effectively says "It is time to stop saving and start spending, or we'll have no product to sell". In consequence of this, `PF_MEMALLOC` is now used more broadly than just for avoiding recursion (though it still has that role). Several kernel threads, such as those for `nbd`, the network block device, `iscsi_tcp`, and the MMC card controller, all set `PF_MEMALLOC`, presumably so they can be sure to get memory whenever they are called upon to write out a page of memory (so it can be freed).
 
-PF_MEMALLOC有效地说“现在是时候停止储蓄和开始消费，或者我们没有产品可以出售”。因此，PF_MEMALLOC现在更广泛地用于避免递归（尽管它仍然具有该角色）。几个内核线程，例如nbd，网络块设备， iscsi_tcp和MMC卡控制器，都设置为PF_MEMALLOC，大概是这样他们可以确保在每次调用写出一页内存时获取内存（所以它可以被释放）。
+指定 `PF_MEMALLOC` 相当于告诉内核 “现在是时候停止储蓄而要开始消费了，否则我们没有产品可以出售”。因此，`PF_MEMALLOC` 不是仅仅用于避免递归（尽管它仍然具备该功能），而是可以用于更广泛的场景。一些内核线程，例如用于 nbd，网络块设备，`iscsi_tcp` 和 MMC 卡控制器，都会设置 `PF_MEMALLOC` 标志，大概这样可以确保在每次调用写出一页内存时获取内存（所以它可以被释放）。
 
 > In contrast, the MTD driver (which manages NAND flash and has a similar role to the MMC card driver) stopped using the `PF_MEMALLOC` flag in 2.6.33 with a comment suggesting it was an inappropriate usage. Whether the other uses in the kernel are still justified is a question too deep for our present discussion.
 
