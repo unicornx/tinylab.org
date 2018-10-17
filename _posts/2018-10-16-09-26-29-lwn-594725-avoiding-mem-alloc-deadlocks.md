@@ -71,13 +71,13 @@ tags:
 
 > In contrast, the MTD driver (which manages NAND flash and has a similar role to the MMC card driver) stopped using the `PF_MEMALLOC` flag in 2.6.33 with a comment suggesting it was an inappropriate usage. Whether the other uses in the kernel are still justified is a question too deep for our present discussion.
 
-相比之下，MTD驱动程序（管理NAND闪存并具有与MMC卡驱动程序类似的作用）停止使用 2.6.33中的PF_MEMALLOC标志，并发表评论表明这是一种不恰当的用法。对于我们目前的讨论来说，内核中的其他用途是否仍然合理是一个问题。
+相反，MTD 驱动程序（用于管理 NAND 闪存并具有与 MMC 存储卡驱动程序类似的作用）从 2.6.33 版本开始不再使用 `PF_MEMALLOC` 标志，并表示这是一种不恰当的用法。关于是否在内核中其他部分是否可以继续使用该标志的问题，过于复杂，暂不在这里展开讨论。
 
 ## `__GFP_IO` in 2.2.0pre6
 
 > When `__GFP_IO` [reappears](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=70c27ee94003b5e3741c5d36f5a84ac6cc81ae82) it has a similar purpose as the original, but for an importantly different reason. To understand that reason, it suffices to look at a comment in the code:
 
-当__GFP_IO 重新出现时， 它具有与原始目的相似的目的，但出于一个非常不同的原因。要理解这个原因，只需查看代码中的注释即可：
+当 `__GFP_IO` 在内核中[重新出现](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=70c27ee94003b5e3741c5d36f5a84ac6cc81ae82)时， 是出于解决一个和原先类似的问题的目的，但涉及的却是一个完全不同的领域。要理解细节，只需查看代码中的注释即可：
 
 	/*
 	 * Don't go down into the swap-out stuff if
@@ -87,11 +87,11 @@ tags:
 
 > The concern here still involves recursion, but it also involves locks, such as the per-inode mutex, the page lock, or various others. Calling into a filesystem to write out a page may require taking a lock. If any such lock is held when allocating memory then it is important to avoid calling into any filesystem code that might try to acquire the same lock. In those cases, the code must be careful not to pass `__GFP_IO`; in other cases, it is perfectly safe to include that flag.
 
-这里的问题仍然涉及递归，但它也涉及锁，例如每个inode互斥锁，页锁或其他各种锁。调用文件系统来写出页面可能需要锁定。如果在分配内存时保持任何此类锁定，则避免调用可能尝试获取相同锁定的任何文件系统代码是很重要的。在这些情况下，代码必须小心不要传递__GFP_IO ; 在其他情况下，包含该标志是完全安全的。
+这里的问题仍然涉及递归，但它也涉及锁，例如每个 inode 互斥锁，页锁或其他各种锁。调用文件系统相关函数将页上数据写出可能需要获取锁。如果在分配内存时对此类锁执行了上锁操作，则需要注意避免调用可能也会尝试获取相同锁的任何文件系统相关函数。在这些情况下，代码必须小心不要指定 `__GFP_IO`；而在其他情况下，包含该标志是完全安全的。
 
 > So while `PF_MEMALLOC` avoids the specific recursion of `get_free_page()` calling into `get_free_page(`), `__GFP_IO` is more general and prevents any function holding a lock from calling, through `get_free_page()`, into any other function which might want that lock. The risk here isn't exhausting the stack as with `PF_MEMALLOC`; the risk is a deadlock.
 
-因此，尽管PF_MEMALLOC避免的具体递归 get_free_page（）调用到get_free_page（） ，__GFP_IO比较一般，并防止持有锁的任何功能与调用，通过 get_free_page（），在其中可能希望该锁的其它任何功能。这里的风险并不像PF_MEMALLOC那样耗尽堆栈; 风险是僵局。
+因此，`PF_MEMALLOC` 要解决的问题十分具体，就是避免在调用 `get_free_page()` 函数过程中又递归地调用 `get_free_page()`，而 __GFP_IO比较一般，并防止持有锁的任何功能与调用，通过 get_free_page（），在其中可能希望该锁的其它任何功能。这里的风险并不像PF_MEMALLOC那样耗尽堆栈; 风险是僵局。
 
 > One might wonder why a `GFP` flag was used for this rather than a process flag, which would effectively say "I am holding a filesystem lock", given that the previous experience with `__GFP_IO` wasn't a success. Like many software designs, it probably just "seemed like a good idea at the time".
 
