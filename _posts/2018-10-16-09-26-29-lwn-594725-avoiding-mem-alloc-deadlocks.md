@@ -32,11 +32,11 @@ tags:
 
 > Any memory allocation request in Linux includes a `gfp_t` argument, which is a set of flags to guide how the `get_free_page()` function can go about locating a free page. [2.1.80pre3](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=472bbf0af5bc9f7c933a5d3212b0d765176e728a) marks a change in this argument's type; it went from being a simple enumerated type to being a bitmask. The concepts embodied in each flag were present previously, but this is the first time that they could be explicitly identified.
 
-当前 Linux 中所有内存分配操作都会涉及一个类型为 `gfp_t` 的参数，该参数是一组比特位标志，用于指示 `get_free_page()` 函数如何分配一个空闲的物理页框。从内核版本 [2.1.80pre3](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=472bbf0af5bc9f7c933a5d3212b0d765176e728a) 开始我们发现该参数的类型定义发生变化；从简单的枚举类型变为以比特位掩码的方式。这些标志的含义在早先的版本中就存在了（译者注，以简单枚举型的方式），但从这个版本开始我们第一次明确使用比特位的方式来定义它们。
+当前 Linux 中所有内存分配操作都会涉及一个类型为 `gfp_t` 的参数，该参数是一组比特位标志，用于指示 `get_free_page()` 函数如何分配一个空闲的物理页框。从内核版本 [2.1.80pre3](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=472bbf0af5bc9f7c933a5d3212b0d765176e728a) 开始我们发现该参数的类型定义发生了变化；从简单的枚举类型变为以比特位掩码的方式。这些标志的含义在早先的版本中就存在了（译者注，以简单枚举型的方式），但从这个版本开始我们第一次明确使用比特位的方式来定义它们。
 
 > `__GFP_IO` was one of the new flags. If it was set, then `get_free_pages()` was allowed to call `shm_swap()` to write some pages out to swap. If `shm_swap()` needed to allocate any `buffer_head` structures to complete the writeout, it would be careful not to set `__GFP_IO`. Without this protection, an infinite recursion could easily happen, which would quickly exhaust the stack and cause the kernel to crash.
 
-在该版本中新增了一些标志，其中之一就是 `__GFP_IO`。如果指定了该标志位，则 `get_free_pages()` 函数将被允许调用 `shm_swap()` 执行一些页框换（swap）出操作。而这可能会出问题。因为如果 `shm_swap()` 函数在执行写出操作中恰好又需要为 `buffer_head` 结构体分配内存，那就很可能会发生无限递归（译者注，指反复调用 `get_free_pages()`），这会耗尽内核栈并导致内核崩溃。
+在该版本中新增了一些标志，其中之一就是 `__GFP_IO`。如果指定了该标志位，则 `get_free_pages()` 函数将被允许调用 `shm_swap()` 执行一些页框换（swap）出操作。但使用该标志却可能会出问题，因为如果 `shm_swap()` 函数在执行写出操作中恰好又需要为 `buffer_head` 结构体分配内存，那就很可能会发生无限递归（译者注，指嵌套地调用 `get_free_pages()`），从而耗尽内核栈并导致内核崩溃。
 
 > We have `__GFP_IO` in the kernel today, but, despite having the same name, it is a different flag. Having been introduced for 2.1.80, the original `__GFP_IO` was removed in 2.1.116, to be replaced with...
 
@@ -46,11 +46,11 @@ tags:
 
 > In the [distant past](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) (August 1998), we did not have change logs of nearly the quality that we have today, so an operating-system archaeologist is left to guess at the reasons for changes. All we can be really sure of is that the (per-request) `__GFP_IO` flag to `get_free_page()` disappeared, and a new per-process flag called `PF_MEMALLOC` appeared to take over the task of avoiding recursion. One clear benefit of this change is that it is more focused in addressing one particular issue: recursion is clearly a per-process issue and so a per-process flag is fitting. Previously, many memory allocation sites would avoid `__GFP_IO` when they didn't really need to, just in case. Now each call site doesn't need to worry about the problem of recursion; that concern is addressed precisely where it is needed.
 
-在遥远的[过去](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d)（1998年8月），我们还没有能和如今相媲美的修改日志管理系统，因此当我试图考证当初修改的原因时不得不加入一些自己的猜测。我们所能确定的是，请求分配内存时传递给 `get_free_page()` 函数的 `__GFP_IO` 标志在 2.1.116 版本中被删除了，取而代之的是增加了一个名为 `PF_MEMALLOC` 的进程标志（Per process flags）。同样是用于解决避免递归调用的问题，新方法的一个明显好处是它更贴近我们所要解决的问题：而递归显然是每个进程自己的问题（译者注：递归耗尽的是每个进程自己的内核栈），因此在进程标志上增加选项更合适。以前，除非万不得已，内核中许多申请内存分配的地方都会尽量避免使用 `__GFP_IO`，而目的仅仅是为了以防万一（指出现递归的问题）。现在则没有这种担心的必要；内核会在更恰当的地方考量这个问题。
+在遥远的[过去](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d)（1998年8月），我们还没有能和如今相媲美的修改日志管理系统，因此当我试图考证当初修改的原因时不得不加入一些自己的猜测。我们所能确定的是，请求分配内存时传递给 `get_free_page()` 函数的 `__GFP_IO` 标志在 2.1.116 版本中被删除了，取而代之的是增加了一个名为 `PF_MEMALLOC` 的进程标志（Per process flags）。同样是用于解决避免递归调用的问题，新方法的一个明显好处是它更贴近我们所要解决的问题：而递归显然是每个进程自己的问题（译者注：递归耗尽的是每个进程自己的内核栈），因此在进程标志上增加选项更合适。以前，除非万不得已，内核中许多申请内存分配的地方都会尽量避免使用 `__GFP_IO`，而目的仅仅是为了以防万一（指出现递归的问题）。现在则没有这种担心的必要；内核会内存分配函数内部更恰当的地方处理这个问题。
 
 > The code comments here highlight an important aspect of memory allocation:
 
-下面的这段代码注释就是内核中处理递归的地方：（译者注，代码注释部分暂不翻译）
+下面的这段代码注释就是内核中处理 `PF_MEMALLOC` 的地方：（译者注，代码注释部分暂不翻译）
 
 	 * The "PF_MEMALLOC" flag protects us against recursion:
 	 * if we need more memory as part of a swap-out effort we
@@ -59,11 +59,11 @@ tags:
 
 > When possible, `get_free_page()` will just pluck a page off the free list and return it as quickly as it can. When that is not possible, it does not satisfy itself with freeing just one page, but will try to free quite a few, to save work next time. Thus, it is re-stocking that startup loan. A particular consequence of `PF_MEMALLOC` is that the memory allocator won't try too hard to gets lots of pages; it will make do with what it has.
 
-（译者注，以下描述参考 2.1.116 版本的 [`root/mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/history/history.git/tree/mm/page_alloc.c?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) 中的 `__get_free_pages()` ，本文提到的 `get_free_page()` 内部最终还是调用的该函数，但只是申请分配一个页框）如果还有空闲的内存，`get_free_page()` 会分配一个页框后立即返回。如果发现内存不足（即对应代码 `if(freepages.min > nr_free_pages)`），它会尝试回收（free，译者注，对于内存分配器来说，是回收，而对页框来说其状态是从 used 变为 free）多个页面而不仅仅只是一个，以确保未来可以有足够的内存可以使用。这么做相当于提前准备好贷款等待下次新来的申请。而如果设置了 `PF_MEMALLOC` 则内存分配器不会尝试回收大量的物理页框；它将直接从当前剩余的内存中进行分配（译者注，参考 [root/mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/history/history.git/tree/mm/vmscan.c?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) 中的 `try_to_free_pages()`，但这里我有个疑问就是感觉此处代码的逻辑和文章的描述是颠倒的，`PF_MEMALLOC` 的标志位设置的效果怎么反而是会去尝试释放内存呢，年代久远不可考，此处以本篇文章描述为准）。
+（译者注，以下描述参考 2.1.116 版本的 [`root/mm/page_alloc.c`](https://git.kernel.org/pub/scm/linux/kernel/git/history/history.git/tree/mm/page_alloc.c?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) 中的 `__get_free_pages()` ，本文提到的 `get_free_page()` 内部最终还是调用的该函数，但只是申请分配一个页框）如果还有空闲的内存，`get_free_page()` 会分配一个页框后立即返回。如果发现内存不足（即对应代码 `if (freepages.min > nr_free_pages)`），它会尝试回收（free，译者注，对于内存分配器来说，是回收，而对页框来说其状态是从 used 变为 free）多个页框而不仅仅只是一个，以确保未来可以有足够的内存可以使用。这么做相当于提前准备好贷款等待下次新来的申请。而如果设置了 `PF_MEMALLOC` 则内存分配器不会尝试回收大量的物理页框；它将直接从当前剩余的内存中进行分配（译者注，参考 [root/mm/vmscan.c](https://git.kernel.org/pub/scm/linux/kernel/git/history/history.git/tree/mm/vmscan.c?id=ac995a26c87ac75983960cbe4085a77b6bbe3e4d) 中的 `try_to_free_pages()`，但这里我有个疑问就是感觉此处代码的逻辑和文章的描述是颠倒的，`PF_MEMALLOC` 的标志位设置的效果怎么反而是会去尝试释放内存呢，年代久远不可考，此处以本篇文章描述为准）。
 
 > This means that processes with the `PF_MEMALLOC` flag set will have access to the last dregs of free memory, while other processes will need to go out and free up lots of memory first before they can use any. This property of `PF_MEMALLOC` is still present and somewhat more formal in the current kernel. The memory allocator has a concept of "watermarks" such that, if the amount of free memory is below the chosen watermark, the allocator will try to free more memory rather than return what it has. Different `__GFP` flags can select different watermark levels (min, low, high). `PF_MEMALLOC` causes all watermarks to be ignored; if any memory is available at all, it will be returned.
 
-这意味着设置了 `PF_MEMALLOC` 标志的进程可以直接从剩余内存中申请内存，而对其他进程，内存分配器则需要先尝试回收大量内存之后才会继续分配内存。`PF_MEMALLOC` 这个属性 在当前内核中仍然存在，而且意义更明确。在内存分配器中有一个所谓 “水位线” （"watermarks"）的概念，如果当前剩余内存量低于所指定的标准（“水位线”），则分配器将尝试回收更多内存而不再继续分配内存。我们可以指定不同的 `__GFP` 标志来选择不同的 “水位线” 级别（最小（min），低（low），高（high））。而指定了 `PF_MEMALLOC` 则导致内存分配器（译者注，准确地说是仅对设定了 `PF_MEMALLOC` 的该进程）忽略所有的“水位线”；只要还有内存可用就立即分配并返回。
+这意味着设置了 `PF_MEMALLOC` 标志的进程可以直接从剩余内存中申请内存，而对其他进程，内存分配器则需要先尝试回收大量内存之后才会继续分配内存。`PF_MEMALLOC` 这个属性 在当前内核中仍然存在，而且意义更明确。在内存分配器中有一个所谓 “水位线” （"watermarks"）的概念，如果当前剩余内存量低于所指定的标准（“水位线”），则分配器将尝试回收更多内存而不再继续分配内存。我们可以指定不同的 `__GFP` 标志来选择不同的 “水位线” 级别（最小（min），低（low），高（high））。而指定了 `PF_MEMALLOC` 则导致内存分配器（译者注，准确地说是仅对设定了 `PF_MEMALLOC` 的该进程）忽略所有的“水位线”；只要还有内存可用就立即从中分配并返回。
 
 > `PF_MEMALLOC` effectively says "It is time to stop saving and start spending, or we'll have no product to sell". In consequence of this, `PF_MEMALLOC` is now used more broadly than just for avoiding recursion (though it still has that role). Several kernel threads, such as those for `nbd`, the network block device, `iscsi_tcp`, and the MMC card controller, all set `PF_MEMALLOC`, presumably so they can be sure to get memory whenever they are called upon to write out a page of memory (so it can be freed).
 
@@ -73,11 +73,11 @@ tags:
 
 相反，MTD 驱动程序（类似MMC 存储卡驱动程序但用于管理 NAND 闪存）从 2.6.33 版本开始不再使用 `PF_MEMALLOC` 标志，其给出的理由是他们认为这是一种不恰当的用法。关于在内核中其他部分是否可以继续使用该标志的问题，过于复杂，暂不在这里展开讨论。
 
-## `__GFP_IO` in 2.2.0pre6
+## 2.2.0pre6 中的 `__GFP_IO`（`__GFP_IO` in 2.2.0pre6）
 
 > When `__GFP_IO` [reappears](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=70c27ee94003b5e3741c5d36f5a84ac6cc81ae82) it has a similar purpose as the original, but for an importantly different reason. To understand that reason, it suffices to look at a comment in the code:
 
-当 `__GFP_IO` 在内核中[重新出现](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=70c27ee94003b5e3741c5d36f5a84ac6cc81ae82)时， 是出于解决一个和原先类似的问题的目的，但涉及的却是一个完全不同的领域。要理解细节，只需查看代码中的注释即可：
+内核中 [重新引入](https://git.kernel.org/cgit/linux/kernel/git/history/history.git/commit/?id=70c27ee94003b5e3741c5d36f5a84ac6cc81ae82) `__GFP_IO` 的目的是为了避免一个和原先类似的问题（译者注，即指递归），但这个问题所造成的结果是完全不同的。要理解细节，只需查看代码中的注释即可：
 
 	/*
 	 * Don't go down into the swap-out stuff if
@@ -87,35 +87,35 @@ tags:
 
 > The concern here still involves recursion, but it also involves locks, such as the per-inode mutex, the page lock, or various others. Calling into a filesystem to write out a page may require taking a lock. If any such lock is held when allocating memory then it is important to avoid calling into any filesystem code that might try to acquire the same lock. In those cases, the code must be careful not to pass `__GFP_IO`; in other cases, it is perfectly safe to include that flag.
 
-这里的问题仍然涉及递归，但它也涉及锁，例如每个 inode 互斥锁，页锁或其他各种锁。调用文件系统相关函数将页上数据写出可能需要获取锁。如果在分配内存时对此类锁执行了上锁操作，则需要注意避免调用可能也会尝试获取相同锁的任何文件系统相关函数。在这些情况下，代码必须小心不要指定 `__GFP_IO`；而在其他情况下，包含该标志是完全安全的。
+这里关心的问题仍然涉及递归，但也涉及锁，例如每个 inode 上的互斥锁，页锁（page lock）或其他各种锁。调用文件系统相关函数将页上数据写出时可能需要获取锁。如果在分配内存时对此类锁执行了上锁操作，则需要注意避免调用可能也会尝试获取相同锁的任何文件系统的相关函数。在这些情况下，分配内存时必须小心，不要指定 `__GFP_IO`；而在其他情况下，指定该标志是完全安全的。
 
 > So while `PF_MEMALLOC` avoids the specific recursion of `get_free_page()` calling into `get_free_page(`), `__GFP_IO` is more general and prevents any function holding a lock from calling, through `get_free_page()`, into any other function which might want that lock. The risk here isn't exhausting the stack as with `PF_MEMALLOC`; the risk is a deadlock.
 
-因此，`PF_MEMALLOC` 要解决的问题十分具体，就是避免在调用 `get_free_page()` 函数过程中又递归地调用 `get_free_page()`，而 `__GFP_IO` 要解决的问题则比较通用，其目的是防止任何函数因为调用 `get_free_page()` 函数并持有锁后，又调用其他可能竞争该锁的其他函数。和 `PF_MEMALLOC` 所不同的是，这里要防范的问题不是尽堆栈，而是避免死锁。
+相比起来，上一节介绍的 `PF_MEMALLOC` 要解决的问题十分具体，就是避免在调用 `get_free_page()` 函数过程中又递归地调用 `get_free_page()`，而这里 `__GFP_IO` 要解决的问题则比较宽泛，其目的是防止任何已经持有锁的函数调用了 `get_free_page()`，而 `get_free_page()` 内部又去调用其他可能竞争该锁的函数。另外一个和 `PF_MEMALLOC` 所不同的是，这里要预防的不是耗尽堆栈，而是避免死锁。
 
 > One might wonder why a `GFP` flag was used for this rather than a process flag, which would effectively say "I am holding a filesystem lock", given that the previous experience with `__GFP_IO` wasn't a success. Like many software designs, it probably just "seemed like a good idea at the time".
 
-有人可能会问为什么这里采用的是 `GFP` 标志，而不是进程标志，根据先前的经验，采用 `__GFP_IO` 并不是一个好的选择，直接通过进程标志通知内核已经持有文件系统锁岂不是更好？像许多软件设计一样，答案可能只是 “这在当时似乎是一个好主意” 罢了。
+有人可能会问为什么这里采用的是 `GFP` 标志，而不是进程标志，根据先前的经验，采用 `__GFP_IO` 并不是一个好的选择，直接通过进程标志通知内核已经持有文件系统锁岂不是更好？原因已经湮没在历史真相中，或许像许多软件设计一样，这可能只是 “在当时似乎是一个好主意” 罢了。
 
-## `__GFP_FS` in 2.4.5.8
+## 2.4.5.8 中的 `__GFP_FS`（`__GFP_FS` in 2.4.5.8）
 
 > This flag started life named `__GFP_BUFFER` in 2.4.5.1, but didn't really work properly until 2.4.5.8 when it was renamed to `__GFP_FS`. Apparently there was a [thinko](http://git.kernel.org/cgit/linux/kernel/git/tglx/history.git/commit/?id=75b566af5cc6f64f9ab5b66608ff8ce18098a2b4) in the original design, which required not only a range of code changes, but also a new name.
 
-这个标志从版本 2.4.5.1 开始出现，当时的名字叫 `__GFP_BUFFER`，但这个标志并没有正常工作，直到 2.4.5.8 版本中被重命名为 `__GFP_FS` 后才开始真正起作用。显然在初始的设计中没有给这个标志起一个恰当的名字，这不仅导致该标志的重命名，也导致凡是使用的地方都需要一系列的修改。
+这个标志从版本 2.4.5.1 开始出现，起初的名字叫 `__GFP_BUFFER`，但这个标志直到 2.4.5.8 版本中被重新命名为 `__GFP_FS` 后才开始真正起作用。显然在初始的设计中对如何给它命名就没有考虑清楚，这不仅导致后来的重命名，也导致凡是使用到它的地方都需要进行相关的修改。
 
 > `__GFP_FS` effectively split some functionality away from `__GFP_IO` so that where there was one flag, now there were two. Only three combinations of the two were expected: neither, both, or the new possibility of just the `__GFP_IO` flag being set. This would allow buffers that were already prepared to be written out, but would prohibit any calls into filesystems to prepare those buffers. I/O activity would be permitted, but filesystem activity would not.
 
-`__GFP_FS` 有效地将一部分功能从 `__GFP_IO` 中分离出来，这导致一些原先只需要指定一个标志位的地方，现在要同时指定两个标志位。这两个标志位只会存在三种组合方式：两个都没有，两个都有，或者是只设置 `__GFP_IO` 标志。如果只设置 `__GFP_IO` 标志的结果是，已经准备好的缓冲区允许被写出，但是会禁止对文件系统的任何调用来准备这些缓冲区。换句话说，只允许输入和输出，但不通过文件系统。
+新增 `__GFP_FS` 的作用在于将一部分功能从 `__GFP_IO` 中分离出来，这导致一些原先只需要指定一个标志的地方，现在要同时指定两个标志。这两个标志只会存在三种组合方式：两个都不设置，两个都设置，或者是只设置 `__GFP_IO` 标志。如果只设置 `__GFP_IO` 标志的结果是，已经准备好的缓冲区可以被写出，但是不可以把这些缓冲区传递给任何文件系统相关函数进行处理。换句话说，可以有输入和输出方面的操作（译者注，设置了 `__GFP_IO`），但不能有涉及文件系统方面的操作（译者注。没有设置 `__GFP_FS`）。
 
 > Presumably, the fact that `__GFP_IO` previously had such a broad effect was harming performance, in that it had to be excluded in places where some I/O was still possible. Refining the rules by adding a new flag led to more flexibility, and so fewer impediments to performance.
 
-据推测，之所以这么修改的原因是，原先的 `__GFP_IO` 的处理方式过于粗放，导致原先一些可以允许输入输出发生的地方也不敢使用该标志位，导致性能上受到影响。添加新标志后可以提高灵活性，整体上可以提升性能。
+据推测，之所以这么修改的原因是，原先的 `__GFP_IO` 涉及面过大，所以一些原本可以允许输入输出发生的地方也不敢使用该标志，导致性能上受到影响。启用新标志后提高了灵活性，最终提升了性能。
 
-## `PF_FSTRANS` in 2.5.36
+## 2.5.36 中的 `PF_FSTRANS`（`PF_FSTRANS` in 2.5.36）
 
 > This new process flag appeared when [XFS support](https://git.kernel.org/cgit/linux/kernel/git/tglx/history.git/commit/?id=ef5cc2fd95520561f7e3c8c49b809000dee033ba) was merged into Linux in late 2002. Its purpose was to indicate that a filesystem transaction (hence the name) was being prepared, meaning that any write to the filesystem would likely block until the transaction processing was complete. The effect of this flag was to exclude `__GFP_FS` from any memory allocation request which happened while `PF_FSTRANS` was set, or at least any request from within the XFS code. Other requests would not be affected, but then other code that allocated memory would be unlikely to be called while the flag was set.
 
-在 2002 年末，这个新的进程标志随着[对 XFS 的支持](https://git.kernel.org/cgit/linux/kernel/git/tglx/history.git/commit/?id=ef5cc2fd95520561f7e3c8c49b809000dee033ba) 被合并到 Linux 中而出现。它的目的是告诉内核该进程正在准备一个文件系统事务（filesystem transaction，正如该标志的名称所示），这意味着在事务处理完成之前，对文件系统的任何写入操作都可能会被阻塞。引入此标志的作用是：在内存分配过程中一旦检测到 `PF_FSTRANS` 被设置，则即使用户指定了 `__GFP_FS` 也不会执行文件系统相关操作。目前只有 XFS 模块的代码会对进程设置该标志，其他调用内存分配的地方暂时不会受到该标志的影响。
+在 2002 年末，这个新的进程标志（`PF_FSTRANS`）随着[对 XFS 的支持](https://git.kernel.org/cgit/linux/kernel/git/tglx/history.git/commit/?id=ef5cc2fd95520561f7e3c8c49b809000dee033ba) 一起被合入到 Linux 中。它的目的是告诉内核该进程正在准备一个文件系统事务（filesystem transaction，正如该标志的名称所示），这意味着在事务处理完成之前，对文件系统的任何写入操作都可能会被阻塞。引入此标志的作用是：在内存分配过程中一旦检测到 `PF_FSTRANS` 被设置，则即使用户指定了 `__GFP_FS` 也不会执行文件系统相关操作。目前只有 XFS 模块的代码会对进程设置该标志，其他调用内存分配的地方暂时不会受到该标志的影响。
 
 > Another way to see this flag is that, in the same way that the original `__GFP_IO` was converted to `PF_MEMALLOC`, now `__GFP_FS` is being converted to a process flag, too. In this case, the conversion is not complete, though.
 
@@ -123,17 +123,17 @@ tags:
 
 > Back in the halcyon days of 2.1.116, removing a flag like `__GFP_IO` was quite straightforward — there were few users and the implications of the change could be easily understood. In the more complex times of 2.5.36, such a step would be far from easy. Carefully adding new functionality is one thing, removing something that is entrenched is quite another, as we have seen with the [Big Kernel Lock](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=4ba8216cd90560bc402f52076f64d8546e8aefcb) and the [`sleep_on()` interface](https://lwn.net/Articles/593670/). Allowing either the new flag or the absence of the old to have the same effect is not a big cost and it was best to leave things that were working alone.
 
-回到 2.1.116 所在的那个年代，删除一个像 `__GFP_IO` 这样的标志是非常简单的，因为当时使用该标志的地方很少，并且可以很容易弄清楚如何修改。而当内核发展到 2.5.36 的时候，事情变得复杂起来，要执行类似的操作远非易事。仔细地添加一个新功能是一回事，删除一个历史悠久的东西则是另一回事，正如我们在[Big Kernel Lock](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=4ba8216cd90560bc402f52076f64d8546e8aefcb) 和 [`sleep_on()` interface](https://lwn.net/Articles/593670/) 中看到的 那样。允许新标志或旧标志的缺席具有相同的效果并不是一个很大的成本，最好留下单独工作的东西。
+在 2.1.116 所在的那个年代，删除一个像 `__GFP_IO` 这样的标志是非常简单的，因为当时使用该标志的地方很少，并且可以很容易弄清楚如何修改。而当内核发展到 2.5.36 的时候，事情变得复杂起来，要执行类似的操作远非易事。正如我们对内核中的 [Big Kernel Lock](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=4ba8216cd90560bc402f52076f64d8546e8aefcb) 和 [`sleep_on()` interface](https://lwn.net/Articles/593670/) 进行优化修改中所看到的那样，仔细地添加一个新功能是一回事，而要删除一个历史悠久的东西则又是另一回事了。如果为了达到相同的效果，增加一个新标志或者删除一个旧标志都不是很麻烦的话，那么还是先保持现状吧。
 
 > Skipping ahead of ourselves a little to [3.6-rc1](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=5cf02d09b50b1e), the `PF_FSTRANS` flag also gets used by NFS. Rather than setting it during a transaction, NFS sets it while constructing and transmitting an RPC request onto the network, so the name is now slightly less appropriate. Also the effect of the flag on NFS is not exactly to clear `__GFP_FS`, but simply to avoid a call to transmit a `COMMIT` request inside `nfs_release_page()`, which is also avoided if `__GFP_FS` is missing. This is a superficially different usage than the usage by XFS, but it has a generally similar effect for a generally similar reason. Modifying the flag to have a more global effect of clearing `GFP_FS` and maybe renaming it to `PF_MEMALLOC_NOFS` might not be a bad idea.
 
-进入 [3.6-rc1](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=5cf02d09b50b1e) 时，`PF_FSTRANS` 标志也被 NFS 使用。NFS 并不是在事务期间设置它，而是在构建 RPC 请求并发送到网络时会设置它，因此现在该标志的名称稍微有点不合适。此外，对于 NFS 来说，该标志的影响并不是清除 `__GFP_FS`，而是为了避免在调用 `nfs_release_page()` 函数中中发送 COMMIT 请求，当然如果不指定 `__GFP_FS`，也能起到相同的效果。这与 XFS 使用它的情况略有不同，但出于类似的原因，效果也是类似的。为了更清晰地清除 `GFP_FS`，给这个标志一个新的名字 `PF_MEMALLOC_NOFS` 或许是个好主意。
+如果我们提前先看一下 [3.6-rc1](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=5cf02d09b50b1e) 会发现，NFS 也会使用 `PF_FSTRANS` 标志。NFS 并不是在事务期间设置它，而是在构建 RPC 请求并发送到网络时会设置它，因此现在该标志的名字稍微有点不准确。此外，对于 NFS 来说，该标志的影响并不是屏蔽 `__GFP_FS`，而是为了避免在调用 `nfs_release_page()` 函数中中发送 COMMIT 请求，当然如果不指定 `__GFP_FS`，也能起到相同的效果。这与 XFS 使用它的情况略有不同，但出于类似的原因，效果也是类似的。为了更清晰地屏蔽 `GFP_FS`，给这个标志起一个新的名字 `PF_MEMALLOC_NOFS` 或许是个好主意。
 
-## `set_gfp_allowed_mask()` in 2.6.34
+## 2.6.34 中的 `set_gfp_allowed_mask()` 函数 （`set_gfp_allowed_mask()` in 2.6.34）
 
 > This function actually [appeared](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=7e85ee0c1d15ca5f8bff0f514f158eba1742dd87) in [2.6.31](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=dcce284a259373f9e5570f2e33f79eca84fcf565), but becomes more interesting in 2.6.34.
 
-这个函数实际上[出现](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=7e85ee0c1d15ca5f8bff0f514f158eba1742dd87) 在 [2.6.31](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=dcce284a259373f9e5570f2e33f79eca84fcf565) 中，但在 2.6.34 中事情变得更有趣了。
+这个函数实际上[出现](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=7e85ee0c1d15ca5f8bff0f514f158eba1742dd87) 在 [2.6.31](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=dcce284a259373f9e5570f2e33f79eca84fcf565) 中，但在 2.6.34 中事情变得更复杂了。
 
 > `gfp_allowed_mask` is a global variable holding a set of `GFP` flags which are allowed to be honored — all others are ignored. In particular, `__GFP_FS`, `__GFP_IO`, and `__GFP_WAIT` (which generally allows `get_free_page()` to wait for memory to be freed by other processes) are sometimes disabled via this mechanism. Thus it is a bit like `PF_FSTRANS`, except that it affects more processes and disables more flags.
 
@@ -141,11 +141,11 @@ tags:
 
 > `gfp_allowed_mask` came about while providing support for `kmalloc()` earlier in the boot process. During early boot, interrupts are still disabled and any attempt to allocate memory with `__GFP_WAIT` or certain other flags can trigger a warning from the `lockdep` checker. It would be surprising if memory were so tight during boot that the allocator actually needed to wait, but getting rid of warnings is generally a good thing, so `gfp_allowed_mask` was initialized to exclude the three flags mentioned, and these were added back in once the boot process was complete.
 
-`gfp_allowed_mask` 用于在内核早期启动期间（boot process）支持 `kmalloc()` 调用。在早期启动期间，中断仍然被禁用，任何试图使用 `__GFP_WAIT` 或某些其他标志分配内存的尝试都会触发 `lockdep` 产生告警。道理很简单，在启动期间，内存是如此紧张，谁还会希望内存分配器在分配内存过程中发生阻塞呢，总之，避免运行过程中的警告总归是一件好事，因此在初始化 `gfp_allowed_mask` 时该变量排除了上面提到的三个标志，一旦引导过程结束这些标志位又会被恢复。
+内核引入 `gfp_allowed_mask` 的作用是为了在内核早期启动期间（boot process）支持 `kmalloc()` 调用。在早期启动期间，中断仍然是被禁用的，如果调用 `kmalloc()` 时指定 `__GFP_WAIT` 或某些其他标志都会触发 `lockdep` 产生告警。道理很简单，在启动期间，内存是如此紧张，谁还会希望内存分配器在分配内存过程中发生阻塞呢，总之，避免运行过程中的警告总归是一件好事，因此在初始化 `gfp_allowed_mask` 时排除了上面提到的三个标志，一旦引导过程结束这些标志位又会被恢复。
 
 > One thing we have learned over the years is that boot isn't as special as we sometimes think: whether it is suspend and resume, or hotplug hardware which teaches us this, it seems to be a lesson we keep finding new perspectives on. In that light, it is perhaps unsurprising that, in [2.6.34](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=452aa6999e6703ffbddd7f6ea124d3968915f3e3), the use of this mask was extended to cover suspend and resume (though an [early version](https://lkml.org/lkml/2009/6/12/82) of the original patch did mention the importance of suspend).
 
-多年来我们学到的一个教训就是，开机并不像我们有时想的那么简单：无论是启动过程中可能发生的暂停和恢复，还是热插拔硬件都在教会我们从各种不同的视角领悟这一点。因此 在 [2.6.34](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=452aa6999e6703ffbddd7f6ea124d3968915f3e3) 这个版本中，`gfp_allowed_mask` 被扩展为支持暂停和恢复（该补丁的[早期版本](https://lkml.org/lkml/2009/6/12/82) 也确实提到了暂停的重要性）。
+多年来我们学到的一个教训就是，开机并不像我们有时想的那么简单：无论是启动过程中可能发生的暂停和恢复，还是热插拔硬件都在教会我们从各种不同的角度领悟这一点。因此 在 [2.6.34](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=452aa6999e6703ffbddd7f6ea124d3968915f3e3) 这个版本中，`gfp_allowed_mask` 被扩展为支持系统挂起（suspend）和恢复（resume）（该补丁的[早期版本](https://lkml.org/lkml/2009/6/12/82) 也确实提到了暂停的重要性）。
 
 > In the case of memory allocation deadlocks, the suspend case is more significant than the boot case. During boot there is usually lots of free memory — not so during suspend, when we may well be short of memory. It wasn't warnings that prompted this change, but genuine deadlocks.
 
@@ -153,11 +153,11 @@ tags:
 
 > Suspend and resume are largely orderly processes, with devices being put to sleep in sequence, and then woken again in the reverse sequence. So it would not be enough just for block devices to avoid using `__GFP_IO` (which they already do). Rather, every driver must avoid the `__GFP_IO` flag, and others, as the target block device of some write request, might be sequenced with this driver so that it is already asleep, and will not awake before this one is completely awake.
 
-暂停和恢复基本上是有序的过程，设备按顺序进入睡眠状态，然后以相反的顺序再次唤醒。因此，仅阻止块设备避免使用 `__GFP_IO`（虽然它们已经这样做）是不够的。相反，每个驱动程序必须避免使用 `__GFP_IO` 标志，而其他驱动程序可能会使用此驱动程序对某个写入请求的目标块设备进行排序，以使其已经处于睡眠状态，并且在此驱动程序完全清醒之前不会唤醒。
+挂起和恢复基本上是有序的过程，设备按顺序进入睡眠状态，然后以相反的顺序被再次唤醒。因此，仅阻止块（block）设备避免使用 `__GFP_IO`（虽然它们已经这样做了）是不够的。每个驱动程序（译者注，在进入睡眠过程中）都应该避免使用 `__GFP_IO` 标志，否则其他设备，譬如块设备，由于这是因为任何写出请求的最终执行者都是块设备，所以一旦块设备已经先进入休眠，则在唤醒过程中块设备不恢复，则调用写出操作的设备也不会被唤醒。
 
 > Having a system-wide setting to disable these flags may be a bit excessive — just the process which is sequencing suspend might be sufficient — but it is certainly an easy fix and, as it cannot affect normal running of the system, it is thus a safe fix.
 
-有一个系统范围的设置来禁用这些标志可能有点过分，因为只要针对顺序执行的进程可能就足够了，但这么做的有点是修复简单，不会影响系统的正常运行，因此它是一个安全修复。
+使用一个系统级别的设置来禁用这些标志可能有点过分，因为只要针对顺序执行挂起的进程进行修改就足够了，但这么做足够简单，而且好处是不会影响系统的正常运行，所以也是安全的。
 
 ## `PF_MEMALLOC_NOIO` in 3.9-rc1
 
