@@ -153,17 +153,17 @@ tags:
 
 > Suspend and resume are largely orderly processes, with devices being put to sleep in sequence, and then woken again in the reverse sequence. So it would not be enough just for block devices to avoid using `__GFP_IO` (which they already do). Rather, every driver must avoid the `__GFP_IO` flag, and others, as the target block device of some write request, might be sequenced with this driver so that it is already asleep, and will not awake before this one is completely awake.
 
-挂起和恢复基本上是有序的过程，设备按顺序进入睡眠状态，然后以相反的顺序被再次唤醒。因此，仅阻止块（block）设备避免使用 `__GFP_IO`（虽然它们已经这样做了）是不够的。每个驱动程序（译者注，在进入睡眠过程中）都应该避免使用 `__GFP_IO` 标志，否则其他设备，譬如块设备，由于这是因为任何写出请求的最终执行者都是块设备，所以一旦块设备已经先进入休眠，则在唤醒过程中块设备不恢复，则调用写出操作的设备也不会被唤醒。
+系统的挂起和恢复是严格有序的过程，设备按顺序进入睡眠状态，然后以相反的顺序被再次唤醒。因此，（在系统挂起过程中）仅阻止块（block）设备避免使用 `__GFP_IO`（虽然它们已经这样做了）是不够的。每个设备的驱动程序都应该在申请内存的请求中避免设置 `__GFP_IO` 标志。否则，如果某个设备的驱动这么做了，一旦写出操作发生，作为写出目标的块设备就会排在这个设备后面进入睡眠，这也意味着在恢复过程中这个设备不唤醒，块设备也无法被唤醒。
 
 > Having a system-wide setting to disable these flags may be a bit excessive — just the process which is sequencing suspend might be sufficient — but it is certainly an easy fix and, as it cannot affect normal running of the system, it is thus a safe fix.
 
-使用一个系统级别的设置来禁用这些标志可能有点过分，因为只要针对顺序执行挂起的进程进行修改就足够了，但这么做足够简单，而且好处是不会影响系统的正常运行，所以也是安全的。
+使用一个系统级别的设置来禁用这些标志可能有点过分，因为只要针对顺序执行挂起的设备进行操作就足够了，但这么做的好处是简单，而且不会影响系统的正常运行，所以也是安全的。
 
-## `PF_MEMALLOC_NOIO` in 3.9-rc1
+## 3.9-rc1 中的 `PF_MEMALLOC_NOIO`（`PF_MEMALLOC_NOIO` in 3.9-rc1）
 
 > Just as suspend/resume has taught us that boot-time is not that much of a special case, so too runtime power management has taught us that suspend isn't all that much of a special case either. If a block device is runtime-suspended to save power, then obviously it cannot handle requests to write out a dirty page of memory until it has woken up, and until any devices it depends on (a USB controller, a PCI bus) are awake too. So none of these devices can safely perform memory allocation using `__GFP_IO`.
 
-就像暂停/恢复这样的场景告诉我们的，启动期间绝不像我们相像的那么简单，运行期间的电源管理也告诉我们暂停并不是特殊情况。如果块设备在运行期间为了节省电量而发生挂起，那么显然它将无法处理写出内存脏页的请求，直到它被唤醒，而且还得确保直到它所依赖的任何其他设备（譬如 USB 控制器，PCI 总线）都处于唤醒状态才可以。因此，在此期间这些设备都不能使用 `__GFP_IO` 安全地执行内存分配操作。
+从上一小节我们知道了，由于挂起/恢复这样的应用存在，启动期间的处理还是蛮复杂的，同样的，运行期间的电源管理也会造成挂起处理的复杂性。如果块设备在运行期间为了节省电量而发生挂起，那么显然它将无法处理写出内存脏页的请求，直到它被唤醒，而且还得确保直到它所依赖的任何其他设备（譬如 USB 控制器，PCI 总线）都处于唤醒状态才可以。因此，在此期间这些设备都不能使用 `__GFP_IO` 安全地执行内存分配操作。
 
 > In order to ensure this, we could use `set_gfp_allowed_mask()` while a device was suspending or resuming, but if multiple such devices were suspending or resuming we could easily lose track of when to restore the right mask. So [this change](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=21caf2fc1931b485483ddd254b634fa8f0099963) introduces a process flag much like `PF_FSTRAN`S, only to disable `__GFP_IO` rather than `__GFP_FS`. It also takes care to record the old value whenever the flag is set, and restore that old value when done. To know when to set this flag, a `memalloc_noio` flag is introduced for each device; it is then propagated into the parents in the device tree. `PF_MEMALLOC_NOIO` is set whenever calling into the power management code for any device with `memalloc_noio` set.
 
