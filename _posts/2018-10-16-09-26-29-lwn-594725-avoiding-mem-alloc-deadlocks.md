@@ -133,7 +133,7 @@ tags:
 
 > This function actually [appeared](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=7e85ee0c1d15ca5f8bff0f514f158eba1742dd87) in [2.6.31](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=dcce284a259373f9e5570f2e33f79eca84fcf565), but becomes more interesting in 2.6.34.
 
-这个函数实际上[出现](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=7e85ee0c1d15ca5f8bff0f514f158eba1742dd87) 在 [2.6.31](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=dcce284a259373f9e5570f2e33f79eca84fcf565) 中，但在 2.6.34 中事情变得更复杂了。
+这个函数实际上[出现](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=7e85ee0c1d15ca5f8bff0f514f158eba1742dd87) 在 [2.6.31](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=dcce284a259373f9e5570f2e33f79eca84fcf565) 中，但在 2.6.34 中代码变得更复杂了。
 
 > `gfp_allowed_mask` is a global variable holding a set of `GFP` flags which are allowed to be honored — all others are ignored. In particular, `__GFP_FS`, `__GFP_IO`, and `__GFP_WAIT` (which generally allows `get_free_page()` to wait for memory to be freed by other processes) are sometimes disabled via this mechanism. Thus it is a bit like `PF_FSTRANS`, except that it affects more processes and disables more flags.
 
@@ -145,7 +145,7 @@ tags:
 
 > One thing we have learned over the years is that boot isn't as special as we sometimes think: whether it is suspend and resume, or hotplug hardware which teaches us this, it seems to be a lesson we keep finding new perspectives on. In that light, it is perhaps unsurprising that, in [2.6.34](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=452aa6999e6703ffbddd7f6ea124d3968915f3e3), the use of this mask was extended to cover suspend and resume (though an [early version](https://lkml.org/lkml/2009/6/12/82) of the original patch did mention the importance of suspend).
 
-多年来我们学到的一个教训就是，开机并不像我们有时想的那么简单：无论是启动过程中可能发生的暂停和恢复，还是热插拔硬件都在教会我们从各种不同的角度领悟这一点。因此 在 [2.6.34](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=452aa6999e6703ffbddd7f6ea124d3968915f3e3) 这个版本中，`gfp_allowed_mask` 被扩展为支持系统挂起（suspend）和恢复（resume）（该补丁的[早期版本](https://lkml.org/lkml/2009/6/12/82) 也确实提到了暂停的重要性）。
+多年来我们学到的一个教训就是，开机引导过程并不像我们有时想的那么简单（译者注，和正常运行时一样存在各种各样的异常需要处理）：无论是启动过程中可能发生的挂起（suspend）和恢复（resume），还是热插拔（hotplug）硬件都在教会我们从各种不同的角度领悟这一点。为了解决这些问题，在 [2.6.34](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=452aa6999e6703ffbddd7f6ea124d3968915f3e3) 这个版本中，`gfp_allowed_mask` 也被用来支持系统挂起和恢复处理（该补丁的[早期版本](https://lkml.org/lkml/2009/6/12/82) 也确实提到了挂起阶段处理的重要性）。
 
 > In the case of memory allocation deadlocks, the suspend case is more significant than the boot case. During boot there is usually lots of free memory — not so during suspend, when we may well be short of memory. It wasn't warnings that prompted this change, but genuine deadlocks.
 
@@ -153,7 +153,7 @@ tags:
 
 > Suspend and resume are largely orderly processes, with devices being put to sleep in sequence, and then woken again in the reverse sequence. So it would not be enough just for block devices to avoid using `__GFP_IO` (which they already do). Rather, every driver must avoid the `__GFP_IO` flag, and others, as the target block device of some write request, might be sequenced with this driver so that it is already asleep, and will not awake before this one is completely awake.
 
-系统的挂起和恢复是严格有序的过程，设备按顺序进入睡眠状态，然后以相反的顺序被再次唤醒。因此，（在系统挂起过程中）仅阻止块（block）设备避免使用 `__GFP_IO`（虽然它们已经这样做了）是不够的。每个设备的驱动程序都应该在申请内存的请求中避免设置 `__GFP_IO` 标志。否则，如果某个设备的驱动这么做了，一旦写出操作发生，作为写出目标的块设备就会排在这个设备后面进入睡眠，这也意味着在恢复过程中这个设备不唤醒，块设备也无法被唤醒。
+系统的挂起和恢复是严格有序的过程，设备按顺序进入睡眠状态，然后以相反的顺序被再次唤醒。因此，（在系统挂起过程中）仅阻止块（block）设备避免使用 `__GFP_IO`（虽然它们已经这样做了）是不够的。每个设备的驱动程序都应该在申请内存的请求中避免设置 `__GFP_IO` 标志。否则，一旦某个设备向内核申请内存导致写出操作发生，作为写出目标的块设备就会被排在这个设备后面进入睡眠，这也意味着在恢复过程中除非这个设备完全醒过来，否则块设备也无法被唤醒。
 
 > Having a system-wide setting to disable these flags may be a bit excessive — just the process which is sequencing suspend might be sufficient — but it is certainly an easy fix and, as it cannot affect normal running of the system, it is thus a safe fix.
 
@@ -163,11 +163,11 @@ tags:
 
 > Just as suspend/resume has taught us that boot-time is not that much of a special case, so too runtime power management has taught us that suspend isn't all that much of a special case either. If a block device is runtime-suspended to save power, then obviously it cannot handle requests to write out a dirty page of memory until it has woken up, and until any devices it depends on (a USB controller, a PCI bus) are awake too. So none of these devices can safely perform memory allocation using `__GFP_IO`.
 
-从上一小节我们知道了，由于挂起/恢复这样的应用存在，启动期间的处理还是蛮复杂的，同样的，运行期间的电源管理也会造成挂起处理的复杂性。如果块设备在运行期间为了节省电量而发生挂起，那么显然它将无法处理写出内存脏页的请求，直到它被唤醒，而且还得确保直到它所依赖的任何其他设备（譬如 USB 控制器，PCI 总线）都处于唤醒状态才可以。因此，在此期间这些设备都不能使用 `__GFP_IO` 安全地执行内存分配操作。
+从上一小节我们知道了，由于挂起和恢复这样的操作存在，启动期间的处理还是蛮复杂的，同样的，运行期间的电源管理也会造成挂起处理的复杂性。如果块设备在运行期间为了节省电量而发生挂起，那么显然它将无法处理写出内存脏页的请求，直到它被唤醒，为了能够唤醒块设备还得确保它所依赖的任何其他设备（譬如 USB 控制器，PCI 总线）也都先于它被唤醒才可以。而在块设备还没有醒来之前所有的这些设备如果要申请内存都必须要避免指定 `__GFP_IO` 。
 
 > In order to ensure this, we could use `set_gfp_allowed_mask()` while a device was suspending or resuming, but if multiple such devices were suspending or resuming we could easily lose track of when to restore the right mask. So [this change](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=21caf2fc1931b485483ddd254b634fa8f0099963) introduces a process flag much like `PF_FSTRAN`S, only to disable `__GFP_IO` rather than `__GFP_FS`. It also takes care to record the old value whenever the flag is set, and restore that old value when done. To know when to set this flag, a `memalloc_noio` flag is introduced for each device; it is then propagated into the parents in the device tree. `PF_MEMALLOC_NOIO` is set whenever calling into the power management code for any device with `memalloc_noio` set.
 
-为了确保这一点，我们可以在设备暂停或恢复时使用 `set_gfp_allowed_mask()`，但如果多个此类设备暂停或恢复，我们很容易忘记何时恢复正确的掩码。因此，此[更改](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=21caf2fc1931b485483ddd254b634fa8f0099963)引入了一个与 `PF_FSTRANS` 非常相似的进程标志，仅用于禁用 `__GFP_IO` 而不是 `__GFP_FS`。每当设置标志时，它还会记录旧值，并在完成时恢复旧值。为了记录何时设置此标志，将为每个设备引入 `memalloc_noio` 标志; 然后它会传播到设备树中的父节点。对于一个设置了 `memalloc_noio` 标志的设备来说，每当它调用电源管理相关代码时，内核都会设置 `PF_MEMALLOC_NOIO` 该标志。
+为了确保这一点，我们可以在单个设备挂起或恢复时使用 `set_gfp_allowed_mask()`，但如果多个此类设备同时发生挂起和恢复，则使用该方法很难维护并确保恢复正确的掩码。因此，此[更改](http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=21caf2fc1931b485483ddd254b634fa8f0099963)引入了一个与 `PF_FSTRANS` 非常相似的进程标志（`PF_MEMALLOC_NOIO`），仅用于禁用 `__GFP_IO` 而不是 `__GFP_FS`。每当设置标志时，它还会记录旧值，并在完成时恢复旧值。为了记录何时设置此标志，将为每个设备引入 `memalloc_noio` 标志; 然后它会传播到设备树中的父节点。对于一个设置了 `memalloc_noio` 标志的设备来说，每当它调用电源管理相关代码时，内核都会设置 `PF_MEMALLOC_NOIO` 该标志。
 
 > As both the early boot processing and the suspend/resume processing are largely single-threaded (or have dedicated threads), it is quite possible that setting `PF_MEMALLOC_NOIO` and `PF_FSTRANS` on those threads would be a sufficient alternative to using `set_gfp_allowed_mask()`. However, as there is no clear benefit from such a change, and no clear certainty that it would work, it is safer, once again, to leave that which works alone.
 
@@ -177,7 +177,7 @@ tags:
 
 > Amid all these details there are a couple of patterns which stand out.
 
-在所有这些细节中，有一些突出的模式。
+通过讨论这些细节，我们可以发现一些突出的共性问题。
 
 > The first is repeated refinement of the "avoid recursion" concept. At first it was implicit in an enumerated value passed to `get_free_page()`, then it was made explicit in the first `__GFP_IO`, and then the `PF_MEMALLOC` flag. Next it was extended to cover more subtle forms of recursion with the second version of `__GFP_IO` and, finally, that was split into two separate flags to express an even wider range of recursion scenarios that can be separately avoided.
 
