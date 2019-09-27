@@ -25,15 +25,15 @@ tags:
 
 > The kernel's timer interface has been around for a long time, and its API shows it. Beyond a lack of conformance with current in-kernel interface patterns, the timer API is not as efficient as it could be and stands in the way of ongoing kernel-hardening efforts. A late addition to the 4.14 kernel paves the way toward a wholesale change of this API to address these problems.
 
-内核的计时器接口已存在很长时间了，它的API显示它。除了缺乏与当前内核中接口模式的一致性之外，定时器API并不像它可能那样高效，并阻碍了正在进行的内核强化工作。4.14内核的后期添加为批量更改此API以解决这些问题铺平了道路。
+对于内核定时器接口，从其提供的编程函数上来看，已经存在有很长一段时间了。除了形式上和当前内核中的接口缺乏一致性之外，其函数运行效率也不能达到我们的期望，并阻碍了正在进行中的内核强化工作。4.14内核的后期添加为批量更改此API以解决这些问题铺平了道路。
 
 > It is worth noting that the kernel has two core timer mechanisms. One of those — the high-resolution timer (or "hrtimer") — subsystem, is focused on near-term events where the timer is expected to run to completion. The other subsystem is just called "kernel timers"; it offers less precision but is more efficient in situations where the timer will probably be canceled before it fires. There are many places in the kernel where timers are used to detect when a device or a network peer has failed to respond within the expected time; when, as usual, the expected response does happen, the timer is canceled. Kernel timers are well suited to that kind of use. The work at hand focuses on that second type of timer.
 
-值得注意的是，内核有两个核心计时器机制。其中之一 - 高分辨率计时器（或“hrtimer”） - 子系​​统，专注于预计计时器运行完成的近期事件。另一个子系统叫做“内核定时器”; 它提供的精度较低，但在计时器可能会在发生之前被取消的情况下效率更高。内核中有许多地方使用定时器来检测设备或网络对等体何时无法在预期时间内响应; 当像往常一样，预期的响应确实发生时，计时器被取消。内核定时器非常适合这种用途。手头的工作集中在第二种计时器上。
+值得注意的是，内核包含两套定时器机制。其中之一称之为 “高分辨率定时器（high-resolution timer，或 hrtimer）”，专用于设置短期内会到期的定时器。另一个叫做 “内核定时器（kernel timers，译者注，下文直接使用不再翻译）”；它提供的定时器精度较低，但在定时器有很大可能性会在到期之前被取消的情况下，其运行效率更高。内核中有许多地方使用定时器来等待设备或网络对端，判断其响应是否超时；但通常情况下，预期的应答都会到达，这导致了定时器被取消。而 “Kernel timers” （译者注，即上文说的第二种定时器）就非常适合这种用途。本文的内容就是和这个第二种定时器有关。
 
 > Kernel timers are described by the `timer_list` structure, defined in [`<linux/timer.h>`](http://elixir.free-electrons.com/linux/v4.14-rc4/source/include/linux/timer.h):
 
-内核定时器由timer_list结构描述，在<linux / timer.h>中定义：
+内核使用 `timer_list` 结构体类型表示 “Kernel timers” ，我们可以在 `<linux / timer.h>` 中找到其定义如下：
 
     struct timer_list {
 	unsigned long		expires;
@@ -44,7 +44,7 @@ tags:
 
 > The `expires` field contains the expiration time of the timer (in jiffies); on expiration, `function()` will be called with the given `data` value. It is possible to fill in a `timer_list` structure manually, but it is more common to use the `setup_timer()` macro:
 
-的期满字段包含了定时器（以jiffies）的到期时间; 在到期时，将使用给定的数据值调用 function（）。可以 手动填写timer_list结构，但更常见的是使用setup_timer（） 宏：
+结构体中的 `expires` 字段存放的是定时器的到期时间（以时钟节拍周期（jiffies）为单位）；当定时器到期时，内核将使用给定的 `data` 字段的值作为参数调用函数 `function()`。编写代码时可以手动填写 `timer_list` 结构，但更常见的是使用 `setup_timer()` 这个宏：
 
     void setup_timer(timer, function, data);
 
