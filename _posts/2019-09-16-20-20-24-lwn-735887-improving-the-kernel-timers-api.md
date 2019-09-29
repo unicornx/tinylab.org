@@ -50,7 +50,7 @@ tags:
 
 > There are a number of issues with this API, as [argued by Kees Cook](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=686fef928bba6be13cabe639f154af7d72b63120). The `data` field bloats the `timer_list` structure unnecessarily and, as an unadorned `unsigned long` value, it resists any sort of type checking. It is not uncommon for callers to cast pointer values to and from this value, for example. For these reasons, it is far more common in current kernel APIs to dispense with the `data` field and, instead, just pass a pointer to the relevant structure (the `timer_list` structure in this case) to the callback. Likely as not, that structure is embedded within a larger structure containing the information the callback needs anyway, so a simple `container_of()` call can replace the casting of the `unsigned long` value.
 
-正如Kees Cook所说，这个API存在许多问题。该数据字段的涨大 timer_list结构不必要的和，作为缦 无符号长值，它抵抗任何种类的类型检查。例如，调用者将指针值转换为此值或从该值转换指针值的情况并不少见。由于这些原因，在当前的内核API中放弃数据字段更为常见，而只是将指针传递给相关结构（在本例中为timer_list结构）到回调。可能没有，该结构嵌入在一个更大的结构中，包含回调所需的信息，所以一个简单的 container_of（）call可以替换unsigned long值的转换。
+正如 Kees Cook [所说][1]，这个 API 存在许多问题。该数据字段的涨大 timer_list结构不必要的和，作为缦 无符号长值，它抵抗任何种类的类型检查。例如，调用者将指针值转换为此值或从该值转换指针值的情况并不少见。由于这些原因，在当前的内核API中放弃数据字段更为常见，而只是将指针传递给相关结构（在本例中为timer_list结构）到回调。可能没有，该结构嵌入在一个更大的结构中，包含回调所需的信息，所以一个简单的 container_of（）call可以替换unsigned long值的转换。
 
 > As might be expected, though, Cook has concerns about this API that go beyond matching the current kernel style. One of those is that a buffer overflow in the area of a `timer_list` structure may be able to overwrite both the function pointer and the data passed to the called function, allowing arbitrary calls within the kernel. That, naturally, makes `timer_list` structures interesting to attackers, and explains why Cook has been [trying to harden timers](https://lwn.net/Articles/731082/) for a while. The prototype of the timer callback, containing a single `unsigned long` argument, is also evidently an impediment to "future control flow integrity work". It would be better if the callback had a unique prototype that was visibly different from all of the other kernel functions taking an `unsigned long` argument.
 
@@ -81,16 +81,4 @@ tags:
 
 **请点击 [LWN 中文翻译计划](/lwn)，了解更多详情。**
 
-[1]: https://elixir.bootlin.com/linux/v2.6.23/source/Documentation/sched-design-CFS.txt
-[2]: https://elixir.bootlin.com/linux/v2.6.23/source/include/linux/sched.h#L896
-[3]: https://elixir.bootlin.com/linux/v2.6.24/source/include/linux/sched.h#L873
-[4]: https://elixir.bootlin.com/linux/v2.6.28/source/Documentation/scheduler/sched-design-CFS.txt
-[5]: https://elixir.bootlin.com/linux/v2.6.23/source/kernel/sched_fair.c#L979
-[6]: https://kernelnewbies.org/Linux_2_6_23#The_CFS_process_scheduler
-[7]: https://lwn.net/Articles/224865/
-[8]: https://lwn.net/Articles/230500/
-[9]: https://lwn.net/Articles/230752/
-[10]: https://lwn.net/Articles/184495/
-[11]: https://lwn.net/Articles/109460/
-[12]: https://lwn.net/Articles/230628/
-[13]: https://lwn.net/Articles/230501/
+[1]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=686fef928bba6be13cabe639f154af7d72b63120
