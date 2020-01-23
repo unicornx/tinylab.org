@@ -18,7 +18,11 @@ tags:
 > By unicornx of [TinyLab.org][1]
 > Jan 22, 2020
 
-在 Shell 编程中我们经常会在一些命令的尾巴上加上 “2>&1”，由于以前对它的语法一直是抱着得过且过的态度，所以一旦用起来就老是记不清楚，然后就是一通搜索、拷贝、黏贴。如此恶性循环，终于今天忍受不了自己对自己的放纵，上网搜了搜，搞得差不多清楚了，赶紧记下来和大家分享一下，希望真正成为自己的知识。
+在 Shell 编程中我们经常会看到一些命令的尾巴上会加上 “2>&1”，譬如：
+```
+ls foo > output.txt 2>&1
+```
+由于以前对它的语法一直是抱着得过且过的态度，所以每次用起来就老是记不清楚，然后就是一通搜索、拷贝、黏贴。如此恶性循环，终于今天忍受不了自己的放纵，上网搜了搜，搞得差不多清楚了，赶紧记下来和大家分享一下，希望真正成为自己的知识。
 
 
 ## 标准输出重定向
@@ -61,9 +65,10 @@ Hello world！
 $ cat hello.txt 1> output.txt
 ```
 
-这里注意两点：
+这里注意几点：
 - `1` 是 stdout 在 Shell 中的代号（官方的说法是文件描述符的值，但本文不打算展开这个知识点），大部分用过 Linux/Unix 的人应该都是知道的。
 - `1` 和 `>` 之间不可以有空格，这个是 Shell 的语法要求，`1> output.txt` 整体上表达的意思就是 stdout 现在指向了 output.txt。
+- `>` 和 `output.txt` 之间可以没有空格，也就是说，写成 `cat hello.txt 1>output.txt` 或者 `cat hello.txt >output.txt` 都是可以的。
 
 ## 标准出错重定向
 
@@ -93,11 +98,11 @@ cat: nop.txt: No such file or directory
 
 ```
 command ---> stdout ---> output.txt
-        |
-        +--> stderr ---> screen
+    |
+    +------> stderr ---> screen
 ```
 
-因此，如果你不想在屏幕上看到出错打印，可以采取的办法就是重定向 stderr，将其指向其他的设备，譬如一个文件。根据 stderr 在 Shell 中的代号是 `2`，并参考前面标准输出的完整写法，我们可以写出如下形式：
+因此，如果你不想在屏幕上看到出错打印，可以采取的办法就是重定向 stderr，将其指向其他的设备，譬如一个文件。和 stdout 类似，stderr 在 Shell 中也有自己的代号是 `2`，并参考前面标准输出的完整写法，我们可以写出如下形式：
 
 ```
 $ cat nop.txt 2> output.txt
@@ -110,61 +115,31 @@ cat: nop.txt: No such file or directory
 
 ```
 command ---> stdout ---> screen
-        |
-        +--> stderr ---> output.txt
+    |
+    +------> stderr ---> output.txt
 ```
 
 ## 标准输出和标准出错同时重定向
 
-那么最后问题来了，如果我们希望将正常的输出（标准输出）和出错信息（标准出错）都打印到 output.txt 文件里该怎么办?
-
-
+最后回到开头的例子 `ls foo > output.txt 2>&1`，通过前面的介绍，差不多可以猜个八九不离十了。额外要解释一下的是这里的 `&1`。这依然是 Shell 要求的语法。`&1` 用于引用 stdout，所以 `2>&1` 的意思就是将 stderr 重定向到 stdout。注意在写法上，这里的 `>` 和 `&1` 之间不可以有空格，否则报语法错。完整地看，Shell 对这条命令的解释处理按照从左往右的顺序进行处理，先将 stdout 重定向到 output.txt，然后再将 stderr 重定向到 stdout，最后实现的逻辑关系表示如下：
 
 ```
-command ---> stdout -+-> output.txt
-        |            | 
-        +--> stderr -+
-```
+command ---> stdout ---> output.txt
+    |          A
+    |          |
+    +------> stderr 
+```  
 
-## 文件描述符
-
-文件描述符不过是代表打开文件的正整数。如果您有100个打开的文件，则将有100个文件描述符。
-
-唯一需要注意的是，在Unix系统中，所有内容都是文件。但这现在并不重要，我们只需要知道标准输出（stdout）和标准错误（stderr）的文件描述符即可。
-
-用简单的英语来说，这意味着存在标识这两个位置的“ id”，并且始终是1for stdout和2for stderr。
-
-回到第一个示例，当我们将输出重定向cat foo.txt到时output.txt，我们可以像这样重写命令：
-
-$ cat foo.txt 1> output.txt
-这1只是的文件描述符stdout。重定向的语法是[FILE_DESCRIPTOR]>，省略文件描述符只是的快捷方式1>。
-
-
-此时，您可能已经知道该2>&1成语在做什么，但让我们使其正式化。
-
-您用于&1引用文件描述符1（stdout）的值。因此，当您使用时，您2>&1基本上是说“将重定向stderr到我们要重定向的同一位置stdout”。这就是为什么我们能够这样做既重定向stdout和stderr同一个地方：
-
-$ cat foo.txt > output.txt 2>&1
-
-$ cat output.txt
-foo
-bar
-baz
-
-$ cat nop.txt > output.txt 2>&1
-
-$ cat output.txt
-cat: nop.txt: No such file or directory
+所以最后达到的效果就是将正常的输出（标准输出）和出错信息（标准出错）都打印到 output.txt 文件里。
 
 ## 总结
 
-程序将输出发送到两个位置：标准输出（stdout）和标准错误（stderr）。
-您可以将这些输出重定向到其他位置（例如文件）。
-文件描述符用于标识stdout（1）和stderr（2）；
-command > output只是捷径command 1> output;
-您可以&[FILE_DESCRIPTOR]用来引用文件描述符值；
-使用2>&1将重定向stderr到设置为的任何值stdout（并且1>&2将执行相反的操作）。
+这里总结一下本文介绍的知识点：
 
+- Shell 中的命令会将输出发送给两个对象：标准输出（stdout）和标准错误（stderr），其中 stdout 用于接收正常的程序输出，stderr 用于接收程序出错时的输出。
+- Shell 用一个整数值来标识 stdout（1）和 stderr（2）；我们可以用 `&1` 和 `&2` 来用用 stdout 和 stderr。
+- 缺省情况下 stdout 和 stderr 都将输出打印在屏幕上，但我们可以将这些输出重定向到其他位置（例如文件）。以重定向 stdout 为例，具体语法是 `command 1> output`，或者简写成 `command > output`。
+- `2>&1` 的作用是将 stderr 重定向到 stdout。
 
 如果您对这个主题感兴趣，请扫描二维码加微信联系我们：
 
